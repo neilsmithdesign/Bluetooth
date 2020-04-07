@@ -35,6 +35,11 @@ struct BatteryLevel: BluetoothData {
 
 
 /// Heart rate beats per minute
+/// First bit of first byte indcates if value is 8 or 16 bit
+/// -- Equal to 0? 8-bit number
+/// -- Equal to 1? 16-bit number
+/// If 8-bit number, value is in the 2nd byte (index 1)
+/// If 16-bit number, value is in the 2nd byte (shifted by 8 bits) and 3rd byte
 struct BPM: BluetoothData {
     let value: Int
     init(bytes: [Byte]) {
@@ -44,6 +49,7 @@ struct BPM: BluetoothData {
             self.value = Int(bytes[1] << 8) + Int(bytes[2])
         }
     }
+    
     init?(from characteristic: CBCharacteristic) {
         guard let data = characteristic.value else { return nil }
         self.init(bytes: .init(data))
@@ -56,6 +62,7 @@ struct BPM: BluetoothData {
 
 
 /// Heart rate sensor body location
+/// The first byte contains the value
 enum BodySensorLocation: Int, BluetoothData {
     case other = 0
     case chest

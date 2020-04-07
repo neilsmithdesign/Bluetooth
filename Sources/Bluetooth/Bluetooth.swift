@@ -315,8 +315,7 @@ extension Bluetooth: CBPeripheralDelegate {
             peripherals.update(with: p)
             print(level.description)
         case .bodySensorLocation:
-            guard let location = BodySensorLocation(from: characteristic) else { return }
-            print(location.description)
+            return // Currently not broadcasting this value outside of the framework.
         case .heartRateMeasurement:
             guard let bpm = BPM(from: characteristic) else { return }
             guard var p = fetch(peripheralFor: peripheral.identifier) else { return }
