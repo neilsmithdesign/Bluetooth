@@ -32,10 +32,10 @@ public extension Service {
     
 }
 
-struct AnyService {
+public struct AnyService {
     
-    let kind: BluetoothService
-    let characteristics: [BluetoothCharacteristic]
+    public let kind: BluetoothService
+    public let characteristics: [BluetoothCharacteristic]
     
     init<C: BluetoothCharacteristic>(_ service: Service<C>) {
         self.kind = service.kind

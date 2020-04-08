@@ -28,6 +28,14 @@ public struct Peripheral: Hashable {
     /// The user (or manufacturer provided) name of the peripheral
     public var name: String { cbPeripheral.name ?? "Unnamed Device" }
     
+    
+    /// Manually assigned by Bluetooth object upon discovery
+    /// This property is provided to help consumers of this library
+    /// determine whether they are interested in this peripheral
+    /// based on it's services. 
+    public var services: [AnyService]?
+    
+    
     /// Used to determine whether this is a peripheral that the
     /// user has previously connected to.
     public internal(set) var isKnown: Bool

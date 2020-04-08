@@ -203,6 +203,18 @@ private extension Bluetooth {
         }
     }
     
+    func update(_ peripheral: CBPeripheral, for cbServices: [CBService]) {
+        guard var p = peripherals.first(where:  { $0.identifier == peripheral.identifier }) else { return }
+        let services = fetch(servicesFor: cbServices)
+        p.services = services
+        peripherals.update(with: p)
+    }
+    
+    func fetch(servicesFor cbServices: [CBService]) -> [AnyService] {
+        let ids = cbServices.map { $0.uuid }
+        return self.services.filter { ids.contains($0.kind.cbuuid) }
+    }
+    
     func update(_ peripheral: CBPeripheral, rssi: NSNumber) {
         guard var p = peripherals.first(where: { $0.identifier == peripheral.identifier }) else { return }
         p.signalStrength = Peripheral.SignalStrength(nsNumber: rssi)
@@ -267,10 +279,11 @@ extension Bluetooth: CBPeripheralDelegate {
             print("Service discovery error: \(err.localizedDescription)")
             return
         }
-        guard let services = peripheral.services else { return }
-        for service in services {
-            guard let characteristics = self.services.first(where: { $0.kind.cbuuid == service.uuid })?.characteristics else { continue }
-            peripheral.discoverCharacteristics(characteristics.map { $0.cbuuid }, for: service)
+        guard let cbServices = peripheral.services else { return }
+        update(peripheral, for: cbServices)
+        for cbService in cbServices {
+            guard let characteristics = self.services.first(where: { $0.kind.cbuuid == cbService.uuid })?.characteristics else { continue }
+            peripheral.discoverCharacteristics(characteristics.map { $0.cbuuid }, for: cbService)
         }
     }
     
