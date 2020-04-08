@@ -16,15 +16,16 @@ public final class Bluetooth: NSObject, ObservableObject {
     public init(scanDuration: TimeInterval = 5) {
         self.scanDuration = scanDuration
         let isAuthorized = CBCentralManager.authorization == .allowedAlways
-        self.state = isAuthorized ? .ready : .notAuthorizedYet
+        self.state = isAuthorized ? .preparing : .notAuthorizedYet
         super.init()
-        if isAuthorized {
-            manager = .init(delegate: self, queue: nil)
-        }
     }
     
     public func require<C: BluetoothCharacteristic>(_ service: Service<C>) {
         self.services.append(AnyService(service))
+    }
+    
+    public func start() {
+        manager = .init(delegate: self, queue: nil)
     }
 
     
@@ -339,7 +340,7 @@ public extension Bluetooth {
 private extension Bluetooth {
     
     func logOnApiMisuse() {
-        print("Bluetooth: Attempting to interact with Core Bluetooth before CBCentralManager has been initialized. Failing silently.")
+        print("Bluetooth: Attempting to interact with Core Bluetooth before CBCentralManager has been initialized. Has func start() been called? Failing silently.")
     }
     
 }
