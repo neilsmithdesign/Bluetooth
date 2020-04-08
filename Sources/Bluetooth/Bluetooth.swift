@@ -13,11 +13,7 @@ public final class Bluetooth: NSObject, ObservableObject {
     
     
     // MARK: - Init
-    public init(services: Set<Bluetooth.Service> = [],
-                characteristics: Set<Bluetooth.Characteristic> = [],
-                scanDuration: TimeInterval = 5) {
-        self.services = services
-        self.characteristics = characteristics
+    public init(scanDuration: TimeInterval = 5) {
         self.scanDuration = scanDuration
         let isAuthorized = CBCentralManager.authorization == .allowedAlways
         self.state = isAuthorized ? .ready : .notAuthorizedYet
@@ -25,6 +21,10 @@ public final class Bluetooth: NSObject, ObservableObject {
         if isAuthorized {
             manager = .init(delegate: self, queue: nil)
         }
+    }
+    
+    public func require<C: BluetoothCharacteristic>(_ service: Service<C>) {
+        self.services.append(AnyService(service))
     }
 
     
@@ -65,18 +65,16 @@ public final class Bluetooth: NSObject, ObservableObject {
     /// A UserDefaults-based cache for remembering a user's devices across app launches
     private lazy var cache: PeripheralCache = .init()
 
-    /// The requested peripheral service to look for
-    private let services: Set<Bluetooth.Service>
+    /// The requested peripheral services to look for
+    private var services: [AnyService] = []
     
     private var serviceUUIDs: [CBUUID]? {
-        services.isEmpty ? nil : services.map { $0.cbuuid }
+        services.isEmpty ? nil : services.map { $0.kind.cbuuid }
     }
     
-    /// The requested peripheral characteristics to look for
-    private let characteristics: Set<Bluetooth.Characteristic>
-    
+    /// The all peripheral characteristics of all services to look for
     private var characteristicsUUIDs: [CBUUID]? {
-        characteristics.isEmpty ? nil : characteristics.map { $0.cbuuid }
+        services.isEmpty ? nil : services.flatMap({ $0.characteristics }).map { $0.cbuuid }
     }
     
     /// The duration a central manager should conduct a scane for before stopping
@@ -270,8 +268,8 @@ extension Bluetooth: CBPeripheralDelegate {
         }
         guard let services = peripheral.services else { return }
         for service in services {
-            guard let uuids = serviceUUIDs, uuids.contains(service.uuid) else { continue }
-            peripheral.discoverCharacteristics(characteristicsUUIDs, for: service)
+            guard let characteristics = self.services.first(where: { $0.kind.cbuuid == service.uuid })?.characteristics else { continue }
+            peripheral.discoverCharacteristics(characteristics.map { $0.cbuuid }, for: service)
         }
     }
     
@@ -304,10 +302,14 @@ extension Bluetooth: CBPeripheralDelegate {
             print("Error receiving updated value for characteristic: \(err.localizedDescription)")
             return
         }
-        guard let char = Bluetooth.Characteristic(cbCharacteristic: characteristic) else {
+        guard let uuids = characteristicsUUIDs, uuids.contains(characteristic.uuid) else {
             return
         }
-        switch char {
+        handle(updatedValueFor: characteristic, peripheral: peripheral)
+    }
+
+    func handle(updatedValueFor characteristic: CBCharacteristic, peripheral: CBPeripheral) {
+        switch characteristic.uuid {
         case .batteryLevel:
             guard let level = BatteryLevel(from: characteristic) else { return }
             guard var p = fetch(peripheralFor: peripheral.identifier) else { return }
@@ -317,14 +319,15 @@ extension Bluetooth: CBPeripheralDelegate {
         case .bodySensorLocation:
             return // Currently not broadcasting this value outside of the framework.
         case .heartRateMeasurement:
-            guard let bpm = BPM(from: characteristic) else { return }
+            guard let bpm = HeartRateMeasurement(from: characteristic) else { return }
             guard var p = fetch(peripheralFor: peripheral.identifier) else { return }
             p.value = bpm.value
             peripherals.update(with: p)
+        default:
+            preconditionFailure("Unhandled characteristic. Must ensure all publicly available characteristics are handled by this module.")
         }
-        
     }
-
+    
 }
 
 public extension Bluetooth {

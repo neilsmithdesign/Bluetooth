@@ -40,7 +40,7 @@ struct BatteryLevel: BluetoothData {
 /// -- Equal to 1? 16-bit number
 /// If 8-bit number, value is in the 2nd byte (index 1)
 /// If 16-bit number, value is in the 2nd byte (shifted by 8 bits) and 3rd byte
-struct BPM: BluetoothData {
+struct HeartRateMeasurement: BluetoothData {
     let value: Int
     init(bytes: [Byte]) {
         if bytes[0] & 0x01 == 0 {

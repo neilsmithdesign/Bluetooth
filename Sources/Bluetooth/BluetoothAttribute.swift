@@ -9,10 +9,10 @@ import Foundation
 import CoreBluetooth
 
 /// A convenience protocol for accessing uuids of services and characteristics
-protocol BluetoothAttribute {
+public protocol BluetoothAttribute {
     var cbuuid: CBUUID { get }
 }
 
 extension BluetoothAttribute where Self: RawRepresentable, Self.RawValue == Bluetooth.GATTAssignedNumber {
-    var cbuuid: CBUUID { .init(string: self.rawValue) }
+    public var cbuuid: CBUUID { .init(string: self.rawValue) }
 }
