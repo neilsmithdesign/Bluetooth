@@ -14,33 +14,126 @@ final class PeripheralCache {
         self.storage = storage
     }
     
-    func contains(peripheralWith identifier: String) -> Bool {
-        retrieve()?.contains(where: { $0 == identifier }) ?? false
+    
+    // MARK: GET / READ
+    var identifiers: [String]? {
+        storage.array(forKey: .identifier) as? [String]
     }
     
-    func store(peripheralWith identifier: String) {
-        if var list = storage.array(forKey: key) as? [String] {
+    func details(forPeripheralWith identifier: String) -> Peripheral.Details? {
+        guard let dictionary = storage.dictionary(forKey: identifier) else { return nil }
+        return Peripheral.Details(from: dictionary)
+    }
+    
+    func contains(peripheralWith identifier: String) -> Bool {
+        identifiers?.contains(where: { $0 == identifier }) ?? false
+    }
+    
+    
+    // MARK: CREATE / UPDATE
+    func store(_ peripheral: Peripheral) {
+        store(peripheral: peripheral.identifier.uuidString)
+        store(detailsFor: peripheral)
+    }
+    
+    private func store(peripheral identifier: String) {
+        if var list = storage.array(forKey: .identifier) as? [String] {
             guard !list.contains(identifier) else { return }
             list.append(identifier)
-            storage.set(list, forKey: key)
+            storage.set(list, forKey: .identifier)
         } else {
-            storage.set([identifier], forKey: key)
+            storage.set([identifier], forKey: .identifier)
         }
     }
     
-    func remove(peripheralWith identifier: String) {
-        if var list = storage.array(forKey: key) as? [String] {
-            guard let i = list.firstIndex(where: { $0 == identifier }) else { return }
+    func store(detailsFor peripheral: Peripheral) {
+        if let details = Peripheral.Details(peripheral: peripheral) {
+            storage.set(details.dictionary, forKey: peripheral.detailsKey)
+        }
+    }
+    
+    
+    // MARK: DELETE
+    func remove(_ peripheral: Peripheral) {
+        if var list = storage.array(forKey: .identifier) as? [String] {
+            guard let i = list.firstIndex(where: { $0 == peripheral.identifier.uuidString }) else { return }
             list.remove(at: i)
-            storage.set(list, forKey: key)
+            storage.set(list, forKey: .identifier)
         }
+        storage.set(nil, forKey: peripheral.detailsKey)
+    }
+
+}
+
+extension Peripheral {
+    
+    struct Details {
+        
+        let servicesIdentifiers: [String]
+        let characteristicsIdentifiers: [String]
+        
+        init?(peripheral: Peripheral) {
+            guard let services = peripheral.services else { return nil }
+            let serviceIDs = services.map({ $0.kind.cbuuid.uuidString })
+            let characteristicsIDs = services.flatMap { $0.characteristics.map { $0.cbuuid.uuidString } }
+            self.servicesIdentifiers = serviceIDs
+            self.characteristicsIdentifiers = characteristicsIDs
+        }
+        
+        init?(from dictionary: [String : Any]) {
+            guard
+                let serviceIDs = dictionary[.services] as? [String],
+                let characteristicIDs = dictionary[.characteristics] as? [String] else {
+                    return nil
+            }
+            self.servicesIdentifiers = serviceIDs
+            self.characteristicsIdentifiers = characteristicIDs
+        }
+        
+        var dictionary: [String : Any] {
+            return [
+                .services : servicesIdentifiers,
+                .characteristics : characteristicsIdentifiers
+            ]
+        }
+        
+        var services: [AnyService]? {
+            let serviceKinds = servicesIdentifiers.compactMap(BluetoothService.init)
+            var services: [AnyService] = []
+            for s in serviceKinds {
+                switch s {
+                case .battery:
+                    let chars = availableCharacteristics(from: BatteryCharacteristic.allCases)
+                    services.append(AnyService(.Battery(characteristics: chars)))
+                case .heartRate:
+                    let chars = availableCharacteristics(from: HeartRateCharacteristic.allCases)
+                    services.append(AnyService(.HeartRate(characteristics: chars)))
+                }
+            }
+            return services.isEmpty ? nil : services
+        }
+        
+        private func availableCharacteristics<C: BluetoothCharacteristic>(from list: [C]) -> [C] {
+            list.filter { characteristicsIdentifiers.contains($0.cbuuid.uuidString) }
+        }
+        
     }
     
-    func retrieve() -> [String]? {
-        storage.array(forKey: key) as? [String]
-    }
+}
+
+
+// MARK: User defaults keys
+private extension String {
     
-    private let key: String = "peripheral.identifiers.list"
+    static var identifier: String { "peripheral.identifiers.list" }
+    static var services: String { "peripheral.details.dictionary.services" }
+    static var characteristics: String { "peripheral.details.dictionary.characteristics" }
+    
+}
+
+private extension Peripheral {
+    
+    var detailsKey: String { self.identifier.uuidString }
     
 }
 

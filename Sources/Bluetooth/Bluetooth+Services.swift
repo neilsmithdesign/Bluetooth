@@ -9,8 +9,8 @@ import Foundation
 import CoreBluetooth
 
 public enum BluetoothService: Bluetooth.GATTAssignedNumber, BluetoothAttribute {
-    case battery = "0x180F"
-    case heartRate = "0x180D"
+    case battery = "180F"
+    case heartRate = "180D"
 }
 
 

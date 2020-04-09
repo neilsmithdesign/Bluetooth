@@ -35,7 +35,6 @@ public struct Peripheral: Hashable {
     /// based on it's services.
     public internal(set) var services: [AnyService]?
     
-    
     /// Used to determine whether this is a peripheral that the
     /// user has previously connected to.
     public internal(set) var isKnown: Bool

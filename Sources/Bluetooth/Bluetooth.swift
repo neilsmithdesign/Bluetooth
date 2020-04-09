@@ -24,6 +24,14 @@ public final class Bluetooth: NSObject, ObservableObject {
         self.services.append(AnyService(service))
     }
     
+    public typealias Authorization = CBManagerAuthorization
+    
+    public static var authorization: Authorization { CBCentralManager.authorization }
+    
+    public static var isAuthorized: Bool {
+        CBCentralManager.authorization == .allowedAlways
+    }
+    
     public func start() {
         manager = .init(delegate: self, queue: nil)
     }
@@ -103,7 +111,7 @@ public extension Bluetooth {
             logOnApiMisuse()
             return
         }
-        guard let identifiers = cache.retrieve()?.compactMap(UUID.init) else { return }
+        guard let identifiers = cache.identifiers?.compactMap(UUID.init) else { return }
         let peripherals: [CBPeripheral]
         if !identifiers.isEmpty {
             peripherals = manager.retrievePeripherals(withIdentifiers: identifiers)
@@ -152,7 +160,7 @@ public extension Bluetooth {
         guard let p = fetch(peripheralFor: identifier, matching: .connected) else { return }
         manager.cancelPeripheralConnection(p.cbPeripheral)
         if shouldForget {
-            cache.remove(peripheralWith: p.identifier.uuidString)
+            cache.remove(p)
         }
     }
     
@@ -165,7 +173,7 @@ public extension Bluetooth {
         guard var p = fetch(peripheralFor: identifier) else { return }
         p.isKnown = false
         peripherals.update(with: p)
-        cache.remove(peripheralWith: identifier.uuidString)
+        cache.remove(p)
     }
     
 }
@@ -182,24 +190,31 @@ private extension Bluetooth {
     }
     
     func store(discovered peripheral: CBPeripheral, rssi: NSNumber? = nil) {
-        let isKnown = cache.contains(peripheralWith: peripheral.identifier.uuidString)
-        update(peripheral, isKnown: isKnown, rssi: rssi)
+        let id = peripheral.identifier.uuidString
+        let isKnown = cache.contains(peripheralWith: id)
+        let details = cache.details(forPeripheralWith: id)
+        update(peripheral, isKnown: isKnown, rssi: rssi, details: details)
     }
     
-    func update(_ peripheral: CBPeripheral, isKnown: Bool, rssi: NSNumber? = nil) {
+    @discardableResult
+    func update(_ peripheral: CBPeripheral, isKnown: Bool, rssi: NSNumber? = nil, details: Peripheral.Details? = nil) -> Peripheral {
         if var p = fetch(peripheralFor: peripheral.identifier) {
             p.isKnown = isKnown
             p.state = peripheral.state
+            p.services = details?.services
             p.signalStrength = Peripheral.SignalStrength(nsNumber: rssi)
             peripherals.update(with: p)
+            return p
         } else {
             let p = Peripheral(
                 cbPeripheral: peripheral,
                 state: peripheral.state,
+                services: details?.services,
                 isKnown: isKnown,
                 signalStrength: Peripheral.SignalStrength(nsNumber: rssi)
             )
             peripherals.insert(p)
+            return p
         }
     }
     
@@ -208,6 +223,7 @@ private extension Bluetooth {
         let services = fetch(servicesFor: cbServices)
         p.services = services
         peripherals.update(with: p)
+        cache.store(detailsFor: p)
     }
     
     func fetch(servicesFor cbServices: [CBService]) -> [AnyService] {
@@ -258,8 +274,8 @@ extension Bluetooth: CBCentralManagerDelegate {
     }
     
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        update(peripheral, isKnown: true)
-        cache.store(peripheralWith: peripheral.identifier.uuidString)
+        let p = update(peripheral, isKnown: true)
+        cache.store(p)
         peripheral.readRSSI()
         peripheral.discoverServices(serviceUUIDs)
     }
