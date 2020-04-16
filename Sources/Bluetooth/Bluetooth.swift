@@ -90,6 +90,10 @@ public final class Bluetooth: NSObject, ObservableObject {
     /// Keep this value to a few seconds to minimise battery usage
     private let scanDuration: TimeInterval
     
+    /// Reference held to work item responsible for stopping the polling of RSSI
+    /// values of specific periperhals. UUID is the identifier of the peripheral
+    private var activeRSSIPolling: [UUID : Timer] = [:]
+    
 }
 
 
@@ -140,12 +144,13 @@ public extension Bluetooth {
     }
     
     /// A user initiated request to connect to a peripheral they have selected
-    func connect(toPeripheralWith identifier: UUID) {
+    func connect(toPeripheralWith identifier: UUID, signalPolling options: Peripheral.SignalStrengthPollingOptions? = nil) {
         guard isManagerReady else {
             logOnApiMisuse()
             return
         }
-        guard let p = fetch(peripheralFor: identifier) else { return }
+        guard var p = fetch(peripheralFor: identifier) else { return }
+        p.signalStrengthPollingOptions = options
         p.cbPeripheral.delegate = self
         peripherals.update(with: p)
         manager.connect(p.cbPeripheral)
@@ -185,7 +190,7 @@ private extension Bluetooth {
     func reconnet(toKnown peripherals: [CBPeripheral]) {
         for peripheral in peripherals {
             store(discovered: peripheral)
-            connect(toPeripheralWith: peripheral.identifier)
+            connect(toPeripheralWith: peripheral.identifier, signalPolling: .init(every: 1, timeOutAfter: 10))
         }
     }
     
@@ -194,6 +199,18 @@ private extension Bluetooth {
         let isKnown = cache.contains(peripheralWith: id)
         let details = cache.details(forPeripheralWith: id)
         update(peripheral, isKnown: isKnown, rssi: rssi, details: details)
+    }
+    
+    func pollRSSI(of periperhal: CBPeripheral, every interval: TimeInterval, timeOutAfter end: TimeInterval) {
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            periperhal.readRSSI()
+        }
+        self.activeRSSIPolling[periperhal.identifier] = timer
+        let workItem = DispatchWorkItem {
+            guard let timer = self.activeRSSIPolling[periperhal.identifier] else { return }
+            timer.invalidate()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + end, execute: workItem)
     }
     
     @discardableResult
@@ -275,6 +292,9 @@ extension Bluetooth: CBCentralManagerDelegate {
     
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let p = update(peripheral, isKnown: true)
+        if let options = p.signalStrengthPollingOptions {
+            pollRSSI(of: peripheral, every: options.every, timeOutAfter: options.timeOutAfter)
+        }
         cache.store(p)
         peripheral.readRSSI()
         peripheral.discoverServices(serviceUUIDs)

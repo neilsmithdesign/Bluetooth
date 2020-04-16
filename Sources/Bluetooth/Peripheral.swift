@@ -46,6 +46,10 @@ public struct Peripheral: Hashable {
     /// described by an Integer. In future releases, this value may need
     /// to change. Possible case for a generic value
     public internal(set) var value: Int?
+
+    /// If desired, the frequency and timeout period for polling the
+    /// peripherals RSSI number to continually get a signal
+    public internal(set) var signalStrengthPollingOptions: SignalStrengthPollingOptions?
     
     /// The signal strength of the peripheral. This is updated in response
     /// to reading the RSSI number
@@ -101,6 +105,15 @@ public extension Peripheral {
             case -70 ..< -60: self = .fair
             default: self = .weak
             }
+        }
+    }
+    
+    struct SignalStrengthPollingOptions {
+        let every: TimeInterval
+        let timeOutAfter: TimeInterval
+        public init(every: TimeInterval, timeOutAfter: TimeInterval) {
+            self.every = every
+            self.timeOutAfter = timeOutAfter
         }
     }
 
