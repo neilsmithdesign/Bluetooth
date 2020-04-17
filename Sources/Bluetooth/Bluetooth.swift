@@ -170,6 +170,9 @@ public extension Bluetooth {
     }
     
     /// A user initiated request to forget a peripheral they have selected
+    /// A call to read RSSI is made. This helps determine whether the peripheral
+    /// being forgotten is either available or not. Useful in order to determine
+    /// the final state/status of the peripheral    
     func forget(knownPeripheralWith identifier: UUID) {
         guard isManagerReady else {
             logOnApiMisuse()
@@ -177,6 +180,7 @@ public extension Bluetooth {
         }
         guard var p = fetch(peripheralFor: identifier) else { return }
         p.isKnown = false
+        p.cbPeripheral.readRSSI()
         peripherals.update(with: p)
         cache.remove(p)
     }

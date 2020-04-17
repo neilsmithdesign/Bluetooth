@@ -59,7 +59,11 @@ public struct Peripheral: Hashable {
     /// in app UIs
     public var status: Peripheral.Status {
         guard state != .connected else { return .connected }
-        return isKnown ? .known : .available
+        if isKnown {
+            return .known
+        } else {
+            return signalStrength == nil ? .unknown : .available
+        }
     }
     
     /// Hashable conformance
